@@ -1,0 +1,93 @@
+resource "azurerm_container_app_environment" "main" {
+  name                       = "cae-test-2-prod"
+  resource_group_name        = azurerm_resource_group.main.name
+  location                   = azurerm_resource_group.main.location
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+  tags                       = local.common_tags
+
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
+}
+
+resource "azurerm_container_app" "main" {
+  name                         = "ca-test-2-prod-be"
+  resource_group_name          = azurerm_resource_group.main.name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  template {
+    container {
+      name   = "be"
+      image  = "mcr.microsoft.com/k8se/quickstart:latest"
+      cpu    = 0.25
+      memory = "0.5Gi"
+    }
+  }
+  identity {
+    type         = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.identity.id]
+  }
+  ingress {
+    target_port      = 8080
+    external_enabled = false
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+  registry {
+    server   = azurerm_container_registry.main.login_server
+    identity = azurerm_user_assigned_identity.identity.id
+  }
+}
+
+resource "azurerm_container_app" "main_2" {
+  name                         = "ca-test-2-prod-fe"
+  resource_group_name          = azurerm_resource_group.main.name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  template {
+    container {
+      name   = "fe"
+      image  = "mcr.microsoft.com/k8se/quickstart:latest"
+      cpu    = 0.25
+      memory = "0.5Gi"
+      env {
+        name  = "API_URL"
+        value = "https://${azurerm_container_app.main.ingress[0].fqdn}"
+      }
+    }
+  }
+  identity {
+    type         = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.identity.id]
+  }
+  ingress {
+    target_port                = 3000
+    external_enabled           = true
+    allow_insecure_connections = false
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+  registry {
+    server   = azurerm_container_registry.main.login_server
+    identity = azurerm_user_assigned_identity.identity.id
+  }
+}
+
+resource "azurerm_container_registry" "main" {
+  name                          = "crtest2prod"
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  sku                           = "Basic"
+  admin_enabled                 = false
+  public_network_access_enabled = true
+  tags                          = local.common_tags
+}
