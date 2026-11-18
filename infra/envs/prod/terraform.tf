@@ -7,4 +7,9 @@ terraform {
       version = "= 5.12.0"
     }
   }
+
+  backend "azurerm" {
+    key              = "prod.tfstate"
+    use_azuread_auth = true
+  }
 }
