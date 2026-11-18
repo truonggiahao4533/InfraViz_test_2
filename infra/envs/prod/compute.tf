@@ -19,28 +19,48 @@ resource "azurerm_container_app" "main" {
   tags                         = local.common_tags
 
   template {
+    min_replicas = 1
+    max_replicas = 3
+
     container {
       name   = "be"
       image  = "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 0.25
       memory = "0.5Gi"
+      readiness_probe {
+        transport = "HTTP"
+        port      = 80
+      }
+      liveness_probe {
+        transport = "HTTP"
+        port      = 80
+      }
     }
   }
+
   identity {
-    type         = "SystemAssigned, UserAssigned"
+    type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.identity.id]
   }
+
   ingress {
-    target_port      = 8080
+    target_port      = 80
     external_enabled = false
     traffic_weight {
       percentage      = 100
       latest_revision = true
     }
   }
+
   registry {
     server   = azurerm_container_registry.main.login_server
     identity = azurerm_user_assigned_identity.identity.id
+  }
+
+  depends_on = [azurerm_role_assignment.access]
+
+  lifecycle {
+    ignore_changes = [template[0].container[0].image]
   }
 }
 
@@ -52,6 +72,9 @@ resource "azurerm_container_app" "main_2" {
   tags                         = local.common_tags
 
   template {
+    min_replicas = 1
+    max_replicas = 3
+
     container {
       name   = "fe"
       image  = "mcr.microsoft.com/k8se/quickstart:latest"
@@ -61,14 +84,24 @@ resource "azurerm_container_app" "main_2" {
         name  = "API_URL"
         value = "https://${azurerm_container_app.main.ingress[0].fqdn}"
       }
+      readiness_probe {
+        transport = "HTTP"
+        port      = 80
+      }
+      liveness_probe {
+        transport = "HTTP"
+        port      = 80
+      }
     }
   }
+
   identity {
-    type         = "SystemAssigned, UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.identity.id]
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.main.id]
   }
+
   ingress {
-    target_port                = 3000
+    target_port                = 80
     external_enabled           = true
     allow_insecure_connections = false
     traffic_weight {
@@ -76,14 +109,21 @@ resource "azurerm_container_app" "main_2" {
       latest_revision = true
     }
   }
+
   registry {
     server   = azurerm_container_registry.main.login_server
-    identity = azurerm_user_assigned_identity.identity.id
+    identity = azurerm_user_assigned_identity.main.id
+  }
+
+  depends_on = [azurerm_role_assignment.main]
+
+  lifecycle {
+    ignore_changes = [template[0].container[0].image]
   }
 }
 
 resource "azurerm_container_registry" "main" {
-  name                          = "crtest2prod"
+  name                          = "crtest2prod74fe98"
   resource_group_name           = azurerm_resource_group.main.name
   location                      = azurerm_resource_group.main.location
   sku                           = "Basic"
