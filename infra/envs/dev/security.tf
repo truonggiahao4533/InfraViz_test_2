@@ -11,3 +11,17 @@ resource "azurerm_role_assignment" "access" {
   principal_id         = azurerm_user_assigned_identity.identity.principal_id
   principal_type       = "ServicePrincipal"
 }
+
+resource "azurerm_user_assigned_identity" "main" {
+  name                = "id-test-2-dev"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  tags                = local.common_tags
+}
+
+resource "azurerm_role_assignment" "main" {
+  scope                = azurerm_container_registry.main.id
+  principal_id         = azurerm_user_assigned_identity.main.principal_id
+  role_definition_name = "AcrPull"
+  principal_type       = "ServicePrincipal"
+}
